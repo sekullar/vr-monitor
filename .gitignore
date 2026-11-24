@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+/build/
+/dist/
+/release/
+/tools/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.log

@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VR Monitor</title>
+<style>
+  :root {
+    --bg: #070910; --card: rgba(255,255,255,.045); --line: rgba(255,255,255,.09);
+    --txt: #e9edff; --mute: #8e98ba; --acc: #5c9dff; --acc2: #9a74ff; --ok: #4ade80; --warn: #fbbf24;
+    --r: 16px;
+  }
+  @media (prefers-color-scheme: light) { :root { color-scheme: dark; } }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background:
+      radial-gradient(900px 500px at 12% -10%, rgba(92,157,255,.18), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(154,116,255,.15), transparent 55%),
+      var(--bg);
+    color: var(--txt); font: 14px/1.45 "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    overflow-x: hidden;
+  }
+  header { display: flex; align-items: center; gap: 14px; padding: 16px 22px 6px; flex-wrap: wrap; }
+  .logo { width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--acc), var(--acc2)); display: grid; place-items: center;
+    box-shadow: 0 6px 20px rgba(92,157,255,.35); }
+  .logo svg { width: 20px; height: 20px; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+  h1 small { display: block; font-size: 11px; font-weight: 400; color: var(--mute); }
+  .sp { flex: 1; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--line); font-size: 12.5px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 0 rgba(251,191,36,.6); }
+  .dot.on { background: var(--ok); animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(74,222,128,.5);} 100% { box-shadow: 0 0 0 9px rgba(74,222,128,0);} }
+  .chip { padding: 5px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line);
+    font-variant-numeric: tabular-nums; font-size: 12px; color: var(--mute); }
+  .chip b { color: var(--txt); font-weight: 600; }
+
+  main { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(340px, 440px); gap: 16px; padding: 10px 22px 22px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
+    backdrop-filter: blur(14px); padding: 16px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--mute); margin: 0 0 12px; font-weight: 600; }
+
+  /* sahne */
+  #stage { width: 100%; height: auto; display: block; touch-action: none; user-select: none; }
+  .hint { color: var(--mute); font-size: 12px; margin-top: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  button, .btn { font: inherit; color: var(--txt); background: rgba(255,255,255,.06); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 12px; cursor: pointer; transition: .15s; }
+  button:hover { background: rgba(255,255,255,.11); border-color: rgba(255,255,255,.18); }
+  button:active { transform: translateY(1px); }
+  button.primary { background: linear-gradient(135deg, var(--acc), var(--acc2)); border: 0; font-weight: 600;
+    box-shadow: 0 6px 18px rgba(92,157,255,.25); }
+  button.primary:hover { filter: brightness(1.08); }
+  button.danger:hover { background: rgba(248,113,113,.18); border-color: rgba(248,113,113,.5); }
+
+  /* sekmeler */
+  .tabs { display: flex; gap: 4px; padding: 4px; background: rgba(0,0,0,.25); border-radius: 12px; margin-bottom: 14px; }
+  .tabs button { flex: 1; border: 0; background: transparent; padding: 8px; color: var(--mute); }
+  .tabs button.on { background: rgba(255,255,255,.1); color: var(--txt); box-shadow: inset 0 0 0 1px var(--line); }
+  .tabpane { display: none; } .tabpane.on { display: block; }
+  .group { margin-bottom: 18px; }
+  .group > h3 { font-size: 12.5px; margin: 0 0 8px; color: var(--mute); font-weight: 600; }
+
+  /* kaydirgac */
+  .sl { margin: 10px 0; }
+  .sl .top { display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .sl .top span:last-child { color: #a9c8ff; font-variant-numeric: tabular-nums; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 6px; outline: none;
+    background: linear-gradient(90deg, var(--acc) var(--p, 50%), rgba(255,255,255,.13) var(--p, 50%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; border: 3px solid var(--acc); box-shadow: 0 2px 8px rgba(0,0,0,.5); cursor: pointer; }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid var(--acc); }
+
+  /* segment / chip secici */
+  .seg { display: flex; gap: 4px; padding: 4px; background: rgba(0,0,0,.25); border-radius: 12px; }
+  .seg button { flex: 1; border: 0; background: transparent; color: var(--mute); padding: 8px 6px; }
+  .seg button.on { background: linear-gradient(135deg, rgba(92,157,255,.9), rgba(154,116,255,.9)); color: #fff; font-weight: 600; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips button { padding: 6px 12px; border-radius: 999px; }
+  .chips button.on { background: rgba(92,157,255,.22); border-color: var(--acc); color: #cfe2ff; }
+
+  /* anahtar */
+  .line { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
+  .sw { position: relative; width: 44px; height: 24px; flex: none; }
+  .sw input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
+  .sw span { position: absolute; inset: 0; background: rgba(255,255,255,.14); border-radius: 999px; transition: .2s; }
+  .sw span::after { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  .sw input:checked + span { background: linear-gradient(135deg, var(--acc), var(--acc2)); }
+  .sw input:checked + span::after { transform: translateX(20px); }
+
+  /* gorsel yukleme */
+  .drop { border: 1.5px dashed rgba(255,255,255,.22); border-radius: 14px; padding: 16px; text-align: center; color: var(--mute);
+    cursor: pointer; transition: .15s; position: relative; overflow: hidden; min-height: 110px; display: grid; place-items: center; }
+  .drop:hover, .drop.over { border-color: var(--acc); background: rgba(92,157,255,.08); color: var(--txt); }
+  .drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .55; }
+  .drop .lbl { position: relative; z-index: 1; text-shadow: 0 1px 6px #000; font-weight: 500; }
+  .swatch { width: 44px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: none; padding: 0; cursor: pointer; }
+
+  /* istatistik */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat { background: rgba(0,0,0,.25); border-radius: 12px; padding: 12px; text-align: center; }
+  .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: .8px; }
+
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 30px); opacity: 0; transition: .25s;
+    background: #1b2036; border: 1px solid var(--line); padding: 10px 16px; border-radius: 12px; z-index: 9; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  #toast.show { transform: translate(-50%, 0); opacity: 1; }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-4l-2-3h-4l-2 3H4a2 2 0 0 1-2-2z"/></svg></div>
+  <h1>VR Monitor<small>Sanal monitör kontrol paneli</small></h1>
+  <div class="sp"></div>
+  <span class="chip" id="chLat" title="Yakalamadan telefonda ekrana yüklenmeye kadar (PC saatiyle ölçülür)">gecikme <b>–</b></span>
+  <span class="chip" id="chFps">fps <b>–</b></span>
+  <span class="chip" id="chMb">Mbit/s <b>–</b></span>
+  <span class="chip" id="chQ">kalite <b>–</b></span>
+  <span class="pill"><span class="dot" id="dot"></span><span id="conn">Telefon bekleniyor…</span></span>
+  <button id="btnRestartAll" title="Yayını ve kontrol motorunu baştan başlatır (telefon otomatik yeniden bağlanır)">↻ Yeniden başlat</button>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Sahne · üstten görünüm</h2>
+    <svg id="stage" viewBox="0 0 600 600"></svg>
+    <div class="hint">Paneli <b>sürükle</b>: konum · <b>tekerlek</b>: boyut · <b>sağ tık + sürükle</b>: yükseklik</div>
+    <div class="row">
+      <button class="primary" id="btnCenter">Telefonu ortala</button>
+      <button id="btnIn">Hepsini yaklaştır</button>
+      <button id="btnOut">Hepsini uzaklaştır</button>
+      <button class="danger" id="btnReset">Varsayılan düzen</button>
+    </div>
+    <h2 style="margin-top:18px">Ekranlar</h2>
+    <div class="row" style="margin-top:0">
+      <span class="chip" id="dispInfo">–</span>
+      <button id="btnDispMinus">− Sanal ekran</button>
+      <button class="primary" id="btnDispPlus">+ Sanal ekran ekle</button>
+    </div>
+    <div class="line"><span>Sanal ekranlar yalnızca program açıkken var olsun <small style="color:var(--mute)">(kapanınca masaüstünden ayrılır; oyunlarda ekstra ekran kasma yapmaz)</small></span><label class="sw"><input type="checkbox" id="virtAuto"><span></span></label></div>
+    <div class="hint">Yeni sanal ekran Windows'ta gerçek ekranının sağına 1920×1080 olarak eklenir ve VR'da yeni bir pencere olur. Eklerken akış birkaç saniye yeniden başlar.</div>
+  </section>
+
+  <section class="card">
+    <div class="tabs" id="tabs">
+      <button data-t="win" class="on">Pencereler</button>
+      <button data-t="env">Ortam</button>
+      <button data-t="hand">El</button>
+      <button data-t="stream">Akış</button>
+    </div>
+
+    <!-- PENCERELER -->
+    <div class="tabpane on" id="t-win">
+      <div class="group"><h3>Seçili pencere</h3><div class="chips" id="selChips"></div><div id="winSliders"></div></div>
+      <div class="group">
+        <h3>Dinamik fokus</h3>
+        <div class="line"><span>Baktığın pencere öne gelsin</span><label class="sw"><input type="checkbox" id="focusOn"><span></span></label></div>
+        <div id="zoomSl"></div>
+        <div class="chips" id="zoomChips"></div>
+      </div>
+    </div>
+
+    <!-- ORTAM -->
+    <div class="tabpane" id="t-env">
+      <div class="group"><h3>Hazır görünümler</h3>
+        <div class="chips" id="presets"></div></div>
+      <div class="group"><h3>Arka plan</h3>
+        <div class="seg" id="bgSeg"><button data-v="dark">Koyu</button><button data-v="camera">Kamera</button><button data-v="image">Görsel</button></div>
+        <div id="bgBright"></div>
+        <div class="line" id="colorLine"><span>Arka plan rengi</span><input type="color" class="swatch" id="bgColor"></div>
+        <div id="imgBox" class="hide">
+          <div class="drop" id="drop"><img id="dropImg" class="hide" alt=""><div class="lbl" id="dropLbl">Görseli buraya sürükle veya tıkla<br><small>JPG / PNG / WebP · 360° panorama (2:1) desteklenir</small></div></div>
+          <input type="file" id="file" accept="image/*" class="hide">
+          <div class="line" style="margin-top:12px"><span>Görsel türü</span>
+            <div class="seg" id="modeSeg" style="width:230px"><button data-v="auto">Otomatik</button><button data-v="sphere">360°</button><button data-v="flat">Sabit</button></div></div>
+          <div class="row"><button class="danger" id="btnClearBg">Görseli kaldır</button></div>
+        </div>
+        <div id="camBox" class="hide"><div class="row"><button id="btnCamRot">Kamera yönünü çevir (90°)</button></div></div>
+      </div>
+      <div class="group"><h3>Gözlük hizalaması (stereo)</h3>
+        <div class="chips"><button id="alignOff">Hizalama kapalı</button><button id="alignDef">Varsayılan (100 px)</button></div>
+        <div class="hint">İki gözün görüntüsü uyuşmuyorsa (çift görme) aşağıdaki "mercek merkezi" kaydırıcısını ayarla. Kamera arka planında hâlâ çift görüyorsan "kamera ek kaydırma"yı ayarla. Hepsi canlı uygulanır; gözlükteyken test edebilirsin.</div>
+        <div id="alignSl"></div></div>
+      <div class="group"><h3>Gölge ve ışık</h3><div id="fx"></div>
+        <div class="line"><span>Odaktaki pencerede vurgu çerçevesi</span><label class="sw"><input type="checkbox" id="ringOn"><span></span></label></div>
+      </div>
+    </div>
+
+    <!-- EL / KONTROL -->
+    <div class="tabpane" id="t-hand">
+      <div class="group"><h3>Kumanda kaynağı</h3>
+        <div class="seg" id="hSrc"><button data-v="off">Kapalı</button><button data-v="pad">DualShock</button><button data-v="pc">PC kamerası</button><button data-v="phone">Telefon kamerası</button></div>
+        <div class="hint" id="hWarn" style="color:#ffb454;display:none">⚠ <b>Kamera önerilmez.</b> Kamerayla el takibi ışığa ve kamera kalitesine bağlıdır; titreme, takılma ve kol yorgunluğu yapabilir. DualShock ya da hava faresi çok daha rahat ve kararlıdır.</div>
+        <div class="hint" id="hErr" style="color:#ff8a8a"></div>
+      </div>
+
+      <!-- DUALSHOCK -->
+      <div id="hPadBox">
+        <div class="group"><div class="stats">
+          <div class="stat"><b id="hPadState">–</b><span>kontrolcü</span></div>
+          <div class="stat"><b id="hPadFps">–</b><span>rapor/sn</span></div>
+          <div class="stat"><b id="hPadBtn">–</b><span>tuş</span></div></div>
+          <div class="hint"><b>Eşleştirme:</b> USB kabloyla tak ya da Bluetooth için PS + Share tuşlarına birlikte basılı tut (ışık çubuğu yanıp sönünce) ve Windows'ta eşleştir. Steam ve DS4Windows kapalı olsun.</div>
+          <div class="hint"><b>Kullanım:</b> kontrolcüyü ileri tut, çevirdikçe lazer döner (fare gibi). <b>R2 / ✕ / dokunmatik yüzey</b> = sol tık · <b>L2 / ○</b> = sağ tık · <b>L1 basılı</b> = imleci dondur (kontrolcüyü rahat bir yere getirirken) · <b>Share</b> = imleci ortala · <b>sağ çubuk</b> = kaydırma.</div>
+          <div id="hSlPad"></div>
+          <div class="line"><span>Lazer yatayda ters mi gidiyor? (sağa çevirince sola)</span><label class="sw"><input type="checkbox" id="hFlipX"><span></span></label></div>
+          <div class="line"><span>Lazer dikeyde ters mi gidiyor? (yukarı kaldırınca aşağı)</span><label class="sw"><input type="checkbox" id="hFlipY"><span></span></label></div>
+        </div>
+      </div>
+
+      <!-- KAMERA (onerilmez) -->
+      <div id="hCamBox">
+        <div class="group"><div class="stats">
+          <div class="stat"><b id="hTrack">–</b><span>el</span></div>
+          <div class="stat"><b id="hFps">–</b><span>fps</span></div>
+          <div class="stat"><b id="hIdx">–</b><span>işaret</span></div>
+          <div class="stat"><b id="hMid">–</b><span>orta</span></div></div>
+          <div class="line"><span>Kullanılan el</span>
+            <div class="seg" id="hHand" style="width:230px"><button data-v="right">Sağ</button><button data-v="left">Sol</button><button data-v="any">Fark etmez</button></div></div>
+          <div class="line" id="rotLine"><span>Telefon kamerası yönü (önizleme yan/ters ise)</span>
+            <div class="seg" id="hRot" style="width:250px"><button data-v="0">0°</button><button data-v="1">90°</button><button data-v="2">180°</button><button data-v="3">270°</button></div></div>
+          <img id="hPrev" alt="" style="width:100%;max-width:320px;border-radius:12px;margin-top:10px;display:block;background:#000">
+          <div class="hint">Elini kameraya göster. Başparmak + işaret parmağı değince <b>tıklama</b> (iki kez = çift tıklama, değdirip tutma = sürükleme), başparmak + orta parmak = <b>sağ tık</b>. El, fare gibi imleci sürer; kameradan çıkınca imleç yerinde kalır.</div>
+          <div id="hSl"></div>
+        </div>
+      </div>
+
+      <div class="group"><div class="line"><span>Gerçek fareyi sür <small style="color:var(--mute)">(kapalıyken yalnızca lazer görünür)</small></span><label class="sw"><input type="checkbox" id="hMouse"><span></span></label></div>
+        <div class="row"><button id="hCenter">İmleci ortala</button><button id="hSweep">Lazer testi (6 sn)</button><button id="hRestart">Kontrol motorunu yeniden başlat</button></div></div>
+    </div>
+
+    <!-- AKIS -->
+    <div class="tabpane" id="t-stream">
+      <div class="group"><div class="stats">
+        <div class="stat"><b id="sFps">–</b><span>fps</span></div>
+        <div class="stat"><b id="sMb">–</b><span>Mbit/s</span></div>
+        <div class="stat"><b id="sKb">–</b><span>KB / kare</span></div>
+        <div class="stat"><b id="sLat">–</b><span>gecikme ms</span></div></div></div>
+      <div class="group"><h3>Akış türü</h3>
+        <div class="seg" id="codecSeg"><button data-v="h264">H.264 (donanım)</button><button data-v="jpeg">JPEG</button></div>
+        <div class="hint" id="encInfo"></div></div>
+      <div class="group" id="brGroup"><h3>H.264 bit hızı</h3><div id="brSl"></div></div>
+      <div class="group"><h3>Baş takibi</h3><div id="predSl"></div>
+        <div class="hint">Kafayı çevirince görüntünün "geriden gelmesini" azaltır: ışık ekrana yansıyana dek geçen süre kadar ileriyi tahmin eder. Titrerse düşür, geride kalıyorsa artır.</div></div>
+      <div class="group"><h3>Çözünürlük (genişlik)</h3><div class="seg" id="widthSeg">
+        <button data-v="1280">720p</button><button data-v="1600">900p</button><button data-v="1920">1080p</button><button data-v="2560">1440p</button><button data-v="0">Orijinal</button></div></div>
+      <div class="group"><h3>Birinci (ana) ekran · FPS</h3><div class="seg" id="fpsSeg"><button data-v="30">30</button><button data-v="60">60</button><button data-v="90">90</button><button data-v="120">120</button><button data-v="144">144</button></div>
+        <div class="hint">Telefon ekranı 60 Hz'deyse 60 üstü boşa gider: Telefon → Ayarlar → Ekran → <b>Hareket akıcılığı → Uyarlanabilir (120 Hz)</b>.</div></div>
+      <div class="group"><h3>Diğer ekranlar · FPS</h3><div class="seg" id="fps2Seg"><button data-v="5">5</button><button data-v="15">15</button><button data-v="30">30</button><button data-v="60">60</button></div></div>
+      <div class="group" id="jpgGroup"><h3>JPEG kalitesi</h3>
+        <div class="line"><span>Hat hızına göre otomatik</span><label class="sw"><input type="checkbox" id="adaptOn"><span></span></label></div>
+        <div id="qSl"></div></div>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+<div id="overlay" class="hide" style="position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:rgba(5,7,14,.78);backdrop-filter:blur(6px)">
+  <div class="card" style="text-align:center;max-width:380px"><div style="font-size:15px;font-weight:600" id="ovTitle">Ekran ayarlanıyor…</div>
+    <div class="hint" id="ovMsg" style="margin-top:8px"></div></div></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const S = { st: null, sel: 0, pend: {}, timer: null, lastEdit: 0, sl: {} };
+const PPM = 36, CX = 300, CY = 330;
+
+const api = (p, body) => fetch(p, { method: 'POST', headers: { 'X-VRM': '1', 'Content-Type': 'application/json' },
+  body: JSON.stringify(body) }).then(r => r.json());
+
+function push(patch) {            // degisiklikleri birlestirip 45 ms sonra tek istekle yolla
+  for (const k in patch) {
+    if (k === 'env' || k === 'stream' || k === 'hands') S.pend[k] = Object.assign(S.pend[k] || {}, patch[k]);
+    else S.pend[k] = patch[k];
+  }
+  S.lastEdit = Date.now();
+  clearTimeout(S.timer);
+  S.timer = setTimeout(() => { const p = S.pend; S.pend = {}; api('/api/state', p).catch(() => toast('Bağlantı hatası')); }, 45);
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2400); }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ---------- kaydirgac ---------- */
+function slider(host, { label, min, max, step, value, fmt = v => v, onInput }) {
+  const el = document.createElement('div'); el.className = 'sl';
+  el.innerHTML = `<div class="top"><span>${label}</span><span></span></div><input type="range">`;
+  const inp = $('input', el), val = $('.top span:last-child', el);
+  inp.min = min; inp.max = max; inp.step = step;
+  const paint = v => { val.textContent = fmt(+v); inp.style.setProperty('--p', ((v - min) / (max - min) * 100) + '%'); };
+  inp.value = value; paint(value);
+  inp.addEventListener('input', () => { paint(inp.value); onInput(+inp.value); });
+  host.appendChild(el);
+  return { set(v) { inp.value = v; paint(v); } };
+}
+
+/* ---------- sahne (ustten gorunum) ---------- */
+const svg = $('#stage'); const NS = 'http://www.w3.org/2000/svg';
+function el(n, a = {}, p) { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+function drawStage() {
+  svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  const g1 = el('linearGradient', { id: 'gsel', x1: 0, x2: 1 }, defs);
+  el('stop', { offset: 0, 'stop-color': '#5c9dff' }, g1); el('stop', { offset: 1, 'stop-color': '#9a74ff' }, g1);
+  const fov = el('radialGradient', { id: 'gfov', cx: CX, cy: CY, r: 300, gradientUnits: 'userSpaceOnUse' }, defs);
+  el('stop', { offset: 0, 'stop-color': 'rgba(92,157,255,.22)' }, fov); el('stop', { offset: 1, 'stop-color': 'rgba(92,157,255,0)' }, fov);
+  for (let m = 1; m <= 8; m++) {
+    el('circle', { cx: CX, cy: CY, r: m * PPM, fill: 'none', stroke: 'rgba(255,255,255,.07)', 'stroke-dasharray': m % 2 ? '2 5' : '' }, svg);
+    const t = el('text', { x: CX + 4, y: CY - m * PPM - 3, fill: 'rgba(255,255,255,.28)', 'font-size': 10 }, svg); t.textContent = m + ' m';
+  }
+  const a = 52 * Math.PI / 180, R = 290;      // gorus alani
+  el('path', { d: `M${CX},${CY} L${CX - Math.sin(a) * R},${CY - Math.cos(a) * R} A${R},${R} 0 0 1 ${CX + Math.sin(a) * R},${CY - Math.cos(a) * R} Z`, fill: 'url(#gfov)' }, svg);
+  el('path', { d: `M${CX},${CY - 16} L${CX - 11},${CY + 9} L${CX + 11},${CY + 9} Z`, fill: '#7f8bb3' }, svg);
+  const me = el('text', { x: CX, y: CY + 26, 'text-anchor': 'middle', fill: '#7f8bb3', 'font-size': 11, 'font-weight': 600 }, svg); me.textContent = 'SEN';
+
+  S.st.panels.forEach((p, i) => {
+    const sel = i === S.sel, w = 3.2 * p.scale * PPM;
+    const y = (p.yaw * Math.PI) / 180;
+    const x = CX + p.dist * PPM * Math.sin(y), yy = CY - p.dist * PPM * Math.cos(y);
+    const g = el('g', { transform: `translate(${x},${yy}) rotate(${p.yaw})`, style: 'cursor:grab' }, svg);
+    g.dataset.i = i;
+    if (sel) el('rect', { x: -w / 2 - 4, y: -11, width: w + 8, height: 22, rx: 11, fill: 'rgba(92,157,255,.18)' }, g);
+    el('rect', { x: -w / 2, y: -5, width: w, height: 10, rx: 5, fill: sel ? 'url(#gsel)' : '#8b93b4' }, g);
+    el('rect', { x: -w / 2, y: -12, width: w, height: 34, fill: 'transparent' }, g);   // tutma alani
+    const lb = el('text', { x: 0, y: 24, 'text-anchor': 'middle', fill: sel ? '#cfe2ff' : '#9aa3c6', 'font-size': 12, 'font-weight': 700,
+      transform: `rotate(${-p.yaw} 0 24)` }, g); lb.textContent = i + 1;
+  });
+}
+let drag = null;
+function svgPt(e) { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left) * 600 / r.width, (e.clientY - r.top) * 600 / r.height]; }
+svg.addEventListener('contextmenu', e => e.preventDefault());
+svg.addEventListener('pointerdown', e => {
+  const g = e.target.closest('g[data-i]'); if (!g) return;
+  S.sel = +g.dataset.i; svg.setPointerCapture(e.pointerId);
+  drag = { i: S.sel, mode: e.button === 2 ? 'pitch' : 'move', y0: e.clientY, p0: S.st.panels[S.sel].pitch };
+  refreshWin(); drawStage();
+});
+svg.addEventListener('pointermove', e => {
+  if (!drag) return; const p = S.st.panels[drag.i];
+  if (drag.mode === 'move') {
+    const [px, py] = svgPt(e), dx = px - CX, dy = py - CY;
+    p.yaw = Math.round(clamp(Math.atan2(dx, -dy) * 180 / Math.PI, -180, 180) * 2) / 2;
+    p.dist = Math.round(clamp(Math.hypot(dx, dy) / PPM, 1, 8) * 20) / 20;
+  } else { p.pitch = Math.round(clamp(drag.p0 - (e.clientY - drag.y0) * 0.4, -70, 70)); }
+  drawStage(); syncWinSliders(); push({ panels: S.st.panels });
+});
+svg.addEventListener('pointerup', () => { drag = null; });
+svg.addEventListener('wheel', e => {
+  e.preventDefault(); const p = S.st.panels[S.sel];
+  p.scale = Math.round(clamp(p.scale * Math.pow(1.1, -Math.sign(e.deltaY)), 0.3, 4) * 100) / 100;
+  drawStage(); syncWinSliders(); push({ panels: S.st.panels });
+}, { passive: false });
+
+/* ---------- pencereler sekmesi ---------- */
+function refreshWin() {
+  const h = $('#selChips'); h.innerHTML = '';
+  S.st.panels.forEach((_, i) => { const b = document.createElement('button'); b.textContent = 'Pencere ' + (i + 1);
+    if (i === S.sel) b.className = 'on'; b.onclick = () => { S.sel = i; refreshWin(); drawStage(); }; h.appendChild(b); });
+  syncWinSliders();
+}
+const WIN = [['yaw', 'Yatay açı', -180, 180, 1, v => v.toFixed(0) + '°'], ['pitch', 'Yükseklik (eğim)', -70, 70, 1, v => v.toFixed(0) + '°'],
+  ['dist', 'Mesafe', 1, 8, 0.05, v => v.toFixed(2) + ' m'], ['scale', 'Boyut', 0.3, 4, 0.05, v => v.toFixed(2) + 'x']];
+function buildWinSliders() {
+  const h = $('#winSliders'); h.innerHTML = '';
+  for (const [k, label, mn, mx, st, fmt] of WIN)
+    S.sl[k] = slider(h, { label, min: mn, max: mx, step: st, value: S.st.panels[S.sel][k], fmt,
+      onInput: v => { S.st.panels[S.sel][k] = v; drawStage(); push({ panels: S.st.panels }); } });
+}
+function syncWinSliders() { for (const [k] of WIN) S.sl[k] && S.sl[k].set(S.st.panels[S.sel][k]); }
+
+/* ---------- ortam sekmesi ---------- */
+const FX = [['shadow', 'Panel gölgesi', 0, 1, .01, v => Math.round(v * 100) + '%'], ['glow', 'Ortam ışıması (panelden yayılan ışık)', 0, 1, .01, v => Math.round(v * 100) + '%'],
+  ['vignette', 'Vinyet (kenar karartma)', 0, 1, .01, v => Math.round(v * 100) + '%'], ['panel_bright', 'Panel parlaklığı', .4, 1.6, .01, v => Math.round(v * 100) + '%'],
+  ['sharpen', 'Panel keskinleştirme (yazıyı netleştirir; çok yüksekse kenarlarda hale)', 0, 1.5, .01, v => Math.round(v * 100) + '%'],
+  ['tex_bias', 'Doku keskinliği (− daha keskin ama titrek, 0 = eski)', -1.5, 1, .05, v => v.toFixed(2)],
+  ['corner', 'Köşe yuvarlama', 0, .12, .002, v => Math.round(v / .12 * 100) + '%'], ['curve', 'Ekran eğriliği (ultrawide)', 0, 1, .01, v => Math.round(v * 100) + '%']];
+const ALIGN = [['lens_shift', 'Mercek merkezi kaydırma: paneller ve arka plan (+ burna doğru, − dışa)', -300, 300, 1, v => v.toFixed(0) + ' px'],
+  ['cam_shift', 'Kamera arka planı ek kaydırma (kamerada hâlâ çift görüyorsan)', -300, 300, 1, v => v.toFixed(0) + ' px']];
+const PRESETS = {
+  'Sinema': { bg: 'dark', bg_bright: .55, shadow: .7, glow: .75, vignette: .5, curve: .35, panel_bright: 1 },
+  'Odak': { bg: 'dark', bg_bright: .5, shadow: .35, glow: .1, vignette: .35, curve: 0, panel_bright: 1 },
+  'Gerçek ortam': { bg: 'camera', bg_bright: 1, shadow: .65, glow: .3, vignette: .15, curve: 0, panel_bright: 1 },
+  'Düz': { bg: 'dark', bg_bright: 1, shadow: 0, glow: 0, vignette: 0, curve: 0, panel_bright: 1 },
+};
+function buildEnv() {
+  const h = $('#fx'); h.innerHTML = '';
+  for (const [k, label, mn, mx, st, fmt] of FX)
+    S.sl[k] = slider(h, { label, min: mn, max: mx, step: st, value: S.st.env[k], fmt, onInput: v => { S.st.env[k] = v; push({ env: { [k]: v } }); } });
+  const al = $('#alignSl'); al.innerHTML = '';
+  for (const [k, label, mn, mx, st, fmt] of ALIGN)
+    S.sl[k] = slider(al, { label, min: mn, max: mx, step: st, value: S.st.env[k] ?? 0, fmt, onInput: v => { S.st.env[k] = v; push({ env: { [k]: v } }); } });
+  S.sl.bg_bright = slider($('#bgBright'), { label: 'Arka plan parlaklığı', min: 0, max: 2, step: .01, value: S.st.env.bg_bright,
+    fmt: v => Math.round(v * 100) + '%', onInput: v => { S.st.env.bg_bright = v; push({ env: { bg_bright: v } }); } });
+  const p = $('#presets'); p.innerHTML = '';
+  for (const name in PRESETS) { const b = document.createElement('button'); b.textContent = name;
+    b.onclick = () => { Object.assign(S.st.env, PRESETS[name]); push({ env: PRESETS[name] }); syncEnv(); toast(name + ' uygulandı'); }; p.appendChild(b); }
+}
+function setSeg(id, val) { $$('#' + id + ' button').forEach(b => b.classList.toggle('on', b.dataset.v === String(val))); }
+function syncEnv() {
+  const e = S.st.env;
+  setSeg('bgSeg', e.bg); setSeg('modeSeg', e.bg_mode);
+  $('#colorLine').classList.toggle('hide', e.bg !== 'dark'); $('#imgBox').classList.toggle('hide', e.bg !== 'image');
+  $('#camBox').classList.toggle('hide', e.bg !== 'camera');
+  $('#bgColor').value = e.bg_color; $('#ringOn').checked = !!e.focus_ring;
+  for (const [k] of FX) S.sl[k] && S.sl[k].set(e[k]);
+  for (const [k] of ALIGN) S.sl[k] && S.sl[k].set(e[k] ?? 0);
+  S.sl.bg_bright && S.sl.bg_bright.set(e.bg_bright);
+  S.sl.pred && S.sl.pred.set(e.predict_ms);
+  if (S.st.has_bg && $('#dropImg').classList.contains('hide')) showBgPreview('/api/bg.jpg?' + Date.now(), S.st.bg_size);
+}
+function showBgPreview(url, size) {
+  const im = $('#dropImg'); im.src = url; im.classList.remove('hide');
+  $('#dropLbl').innerHTML = size && size[0] ? `Görsel yüklü · ${size[0]}×${size[1]}<br><small>Değiştirmek için sürükle veya tıkla</small>` : 'Görsel yüklü';
+}
+$$('#bgSeg button').forEach(b => b.onclick = () => {
+  const v = b.dataset.v;
+  if (v === 'image' && !S.st.has_bg) { S.st.env.bg = 'image'; syncEnv(); $('#file').click(); return; }
+  S.st.env.bg = v; push({ env: { bg: v } }); syncEnv();
+});
+$$('#modeSeg button').forEach(b => b.onclick = () => { S.st.env.bg_mode = b.dataset.v; push({ env: { bg_mode: b.dataset.v } }); syncEnv(); });
+$('#bgColor').oninput = e => { S.st.env.bg_color = e.target.value; push({ env: { bg_color: e.target.value } }); };
+$('#ringOn').onchange = e => { S.st.env.focus_ring = e.target.checked; push({ env: { focus_ring: e.target.checked } }); };
+$('#btnCamRot').onclick = () => api('/api/command', { cmd: 'camrot' });
+$('#alignOff').onclick = () => { Object.assign(S.st.env, { lens_shift: 0, cam_shift: 0 }); push({ env: { lens_shift: 0, cam_shift: 0 } }); syncEnv(); toast('Stereo hizalama kapatıldı'); };
+$('#alignDef').onclick = () => { Object.assign(S.st.env, { lens_shift: 100, cam_shift: 0 }); push({ env: { lens_shift: 100, cam_shift: 0 } }); syncEnv(); toast('Varsayılan hizalama (100 px)'); };
+$('#btnClearBg').onclick = async () => {
+  await api('/api/command', { cmd: 'clear_bg' });
+  $('#dropImg').classList.add('hide'); $('#dropImg').removeAttribute('src');
+  $('#dropLbl').innerHTML = 'Görseli buraya sürükle veya tıkla<br><small>JPG / PNG / WebP · 360° panorama (2:1) desteklenir</small>';
+  await load(); toast('Görsel kaldırıldı');
+};
+
+async function upload(file) {
+  if (!file || !file.type.startsWith('image/')) { toast('Lütfen bir görsel seç'); return; }
+  $('#dropLbl').textContent = 'Yükleniyor…';
+  try {
+    const r = await fetch('/api/bgimage', { method: 'POST', headers: { 'X-VRM': '1', 'Content-Type': 'application/octet-stream' }, body: file });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'hata');
+    S.st.has_bg = true; S.st.bg_size = j.size; S.st.env.bg = 'image';
+    showBgPreview(URL.createObjectURL(file), j.size); syncEnv();
+    toast(`Arka plan ayarlandı · ${j.size[0]}×${j.size[1]}`);
+  } catch (e) { toast('Görsel yüklenemedi: ' + e.message); $('#dropLbl').textContent = 'Görseli buraya sürükle veya tıkla'; }
+}
+const drop = $('#drop');
+drop.onclick = () => $('#file').click();
+$('#file').onchange = e => upload(e.target.files[0]);
+['dragenter', 'dragover'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => upload(e.dataTransfer.files[0]));
+
+/* ---------- akis sekmesi ---------- */
+function buildStream() {
+  S.sl.pred = slider($('#predSl'), { label: 'Gecikme telafisi (tahmin)', min: 0, max: 60, step: 1, value: S.st.env.predict_ms,
+    fmt: v => v.toFixed(0) + ' ms', onInput: v => { S.st.env.predict_ms = v; push({ env: { predict_ms: v } }); } });
+  S.sl.br = slider($('#brSl'), { label: 'Bit hızı (panel başına)', min: 10, max: 120, step: 5, value: S.st.stream.bitrate,
+    fmt: v => v.toFixed(0) + ' Mbit/s', onInput: v => { S.st.stream.bitrate = v; push({ stream: { bitrate: v } }); } });
+  S.sl.q = slider($('#qSl'), { label: 'Kalite (sabit mod)', min: 30, max: 95, step: 1, value: S.st.stream.quality, fmt: v => v.toFixed(0),
+    onInput: v => { S.st.stream.quality = v; push({ stream: { quality: v } }); } });
+}
+function syncStream() {
+  const s = S.st.stream; setSeg('widthSeg', s.width); setSeg('fpsSeg', s.fps); setSeg('fps2Seg', s.fps_other);
+  setSeg('codecSeg', s.codec);
+  $('#brGroup').classList.toggle('hide', s.codec !== 'h264'); $('#jpgGroup').classList.toggle('hide', s.codec === 'h264');
+  $('#encInfo').textContent = s.h264_ok ? `Kodlayıcı: ${s.encoder || '?'} · ekran kartında kodlanır, CPU yüklenmez` : 'Donanım H.264 bu makinede kullanılamıyor (JPEG)';
+  if (S.sl.br) S.sl.br.set(s.bitrate);
+  $('#adaptOn').checked = s.adapt; $('#qSl').classList.toggle('hide', s.adapt);
+}
+$$('#widthSeg button').forEach(b => b.onclick = () => { S.st.stream.width = +b.dataset.v; push({ stream: { width: +b.dataset.v } }); syncStream(); });
+$$('#fpsSeg button').forEach(b => b.onclick = () => { S.st.stream.fps = +b.dataset.v; push({ stream: { fps: +b.dataset.v } }); syncStream(); });
+$$('#codecSeg button').forEach(b => b.onclick = () => {
+  if (b.dataset.v === 'h264' && !S.st.stream.h264_ok) { toast('Donanım H.264 bu makinede yok'); return; }
+  S.st.stream.codec = b.dataset.v; push({ stream: { codec: b.dataset.v } }); syncStream();
+});
+$$('#fps2Seg button').forEach(b => b.onclick = () => { S.st.stream.fps_other = +b.dataset.v; push({ stream: { fps_other: +b.dataset.v } }); syncStream(); });
+$('#btnDispPlus').onclick = () => setDisplays(S.st.displays.virtual + 1);
+$('#btnDispMinus').onclick = () => setDisplays(S.st.displays.virtual - 1);
+function setDisplays(n) {
+  const d = S.st.displays; n = Math.max(0, Math.min(d.max, n));
+  if (n === d.virtual) { toast(n === d.max ? 'En fazla ' + d.max + ' sanal ekran' : 'Zaten sanal ekran yok'); return; }
+  api('/api/command', { cmd: 'set_displays', count: n });
+}
+$('#virtAuto').onchange = e => { api('/api/command', { cmd: 'virtual_auto', on: e.target.checked });
+  toast(e.target.checked ? 'Sanal ekranlar program kapanınca masaüstünden ayrılacak' : 'Sanal ekranlar hep açık kalacak'); };
+$('#adaptOn').onchange = e => { S.st.stream.adapt = e.target.checked; push({ stream: { adapt: e.target.checked } }); syncStream(); };
+
+/* ---------- el / kontrol sekmesi ---------- */
+const HSL_CAM = [['gain_x', 'Yatay hassasiyet (yüksek = daha az el hareketi)', 40, 400, 1, v => v.toFixed(0) + '°'],
+  ['gain_y', 'Dikey hassasiyet', 30, 300, 1, v => v.toFixed(0) + '°'],
+  ['stab', 'Titreme engelleme (yüksek = el titremesi yok sayılır)', 0, 1, .01, v => Math.round(v * 100) + '%'],
+  ['accel', 'Hızlanma (hızlı el = geniş tarama)', 0, 3, .05, v => v.toFixed(2)],
+  ['smooth', 'Yumuşatma (titremeyi azaltır, gecikme ekler)', 0, 1, .01, v => Math.round(v * 100) + '%'],
+  ['pinch_on', 'Değdirme eşiği (küçük = daha sıkı değdirmek gerekir)', .12, .55, .01, v => v.toFixed(2)],
+  ['deadzone', 'Tıklarken imleç kilidi', 0, 6, .1, v => v.toFixed(1) + '°']];
+const HSL_PAD = [['pad_gain', 'Kontrolcü hassasiyeti (yüksek = az çevirince lazer çok gider)', .3, 5, .05, v => v.toFixed(2) + 'x'],
+  ['deadzone', 'Tıklarken imleç kilidi (tetiğe basınca kontrolcü sarsılır)', 0, 6, .1, v => v.toFixed(1) + '°']];
+const CAM_WARN = '⚠ Kamera önerilmez: ışığa ve kamera kalitesine bağlı, titreme ve kol yorgunluğu yapabilir. DualShock ya da hava faresi önerilir.';
+function buildSliders(host, list, prefix) {
+  const h = S.st.hands; host.innerHTML = '';
+  for (const [k, label, mn, mx, st, fmt] of list)
+    S.sl[prefix + k] = slider(host, { label, min: mn, max: mx, step: st, value: h.cfg[k], fmt,
+      onInput: v => { S.st.hands.cfg[k] = v; push({ hands: { [k]: v } }); } });
+}
+function buildHand() {
+  const h = S.st.hands; if (!h) { $('#t-hand').innerHTML = '<div class="hint">El kontrolü başlatılamadı.</div>'; return; }
+  buildSliders($('#hSl'), HSL_CAM, 'h_'); buildSliders($('#hSlPad'), HSL_PAD, 'hp_');
+  if (h.cfg.mode !== 'rel') push({ hands: { mode: 'rel' } });        // tek mod: goreli (fare gibi)
+}
+function syncHand() {
+  const h = S.st.hands; if (!h) return; const c = h.cfg;
+  const cam = c.source === 'pc' || c.source === 'phone';
+  setSeg('hSrc', c.source); setSeg('hHand', c.hand); setSeg('hRot', c.phone_rot);
+  $('#hPadBox').classList.toggle('hide', c.source !== 'pad');
+  $('#hCamBox').classList.toggle('hide', !cam);
+  $('#hWarn').style.display = cam ? 'block' : 'none';
+  $('#rotLine').classList.toggle('hide', c.source !== 'phone');
+  $('#hMouse').checked = !!c.mouse; $('#hFlipX').checked = !!c.flip_x; $('#hFlipY').checked = !!c.flip_y;
+  for (const [k] of HSL_CAM) S.sl['h_' + k] && S.sl['h_' + k].set(c[k]);
+  for (const [k] of HSL_PAD) S.sl['hp_' + k] && S.sl['hp_' + k].set(c[k]);
+  $('#hTrack').textContent = h.tracking ? (h.btn === 'L' ? 'sol tık' : h.btn === 'R' ? 'sağ tık' : 'var') : 'yok';
+  $('#hFps').textContent = cam ? h.fps : '–';
+  $('#hIdx').textContent = h.tracking && cam ? h.idx.toFixed(2) : '–'; $('#hMid').textContent = h.tracking && cam ? h.mid.toFixed(2) : '–';
+  $('#hPadState').textContent = c.source === 'pad' ? (h.pad ? 'bağlı · ' + h.pad : 'bulunamadı') : '–';
+  $('#hPadFps').textContent = c.source === 'pad' && h.pad ? h.fps : '–';
+  $('#hPadBtn').textContent = c.source === 'pad' && h.btn ? (h.btn === 'L' ? 'sol tık' : 'sağ tık') : '–';
+  $('#hErr').textContent = h.error || '';
+}
+$$('#hRot button').forEach(b => b.onclick = () => { S.st.hands.cfg.phone_rot = +b.dataset.v; push({ hands: { phone_rot: +b.dataset.v } }); syncHand(); });
+$$('#hSrc button').forEach(b => b.onclick = () => {
+  const v = b.dataset.v; S.st.hands.cfg.source = v; push({ hands: { source: v } }); syncHand();
+  if (v === 'pc' || v === 'phone') toast(CAM_WARN);               // kamera her secildiginde uyar
+});
+$$('#hHand button').forEach(b => b.onclick = () => { S.st.hands.cfg.hand = b.dataset.v; push({ hands: { hand: b.dataset.v } }); syncHand(); });
+$('#hFlipX').onchange = e => { S.st.hands.cfg.flip_x = e.target.checked; push({ hands: { flip_x: e.target.checked } }); };
+$('#hFlipY').onchange = e => { S.st.hands.cfg.flip_y = e.target.checked; push({ hands: { flip_y: e.target.checked } }); };
+$('#hMouse').onchange = e => { S.st.hands.cfg.mouse = e.target.checked; push({ hands: { mouse: e.target.checked } });
+  toast(e.target.checked ? 'Kumanda artık gerçek fareyi sürüyor' : 'Fare kontrolü kapandı'); };
+$('#hCenter').onclick = () => { api('/api/command', { cmd: 'hand_center' }).then(load); toast('İmleç ortalandı'); };
+$('#hRestart').onclick = () => { api('/api/command', { cmd: 'restart_engine' }); toast('Kontrol motoru yeniden başlatılıyor…'); };
+$('#btnRestartAll').onclick = async () => {
+  if (!confirm('Yayın ve kontrol motoru yeniden başlatılsın mı? (Telefon birkaç saniye içinde kendiliğinden yeniden bağlanır.)')) return;
+  try { await api('/api/command', { cmd: 'restart_all' }); } catch (e) { }
+  $('#ovTitle').textContent = 'Yeniden başlatılıyor…'; $('#ovMsg').textContent = 'Yayın ve kontrol motoru baştan başlıyor. Bu pencere kendiliğinden yenilenecek.';
+  $('#overlay').classList.remove('hide');
+  const t0 = Date.now();
+  const iv = setInterval(async () => {                       // program geri gelince sayfayi yenile
+    try { const r = await fetch('/api/state'); if (r.ok && Date.now() - t0 > 3000) { clearInterval(iv); location.reload(); } } catch (e) { }
+  }, 1000);
+};
+$('#hSweep').onclick = () => { api('/api/command', { cmd: 'hand_sweep' }); toast('Lazer testi: VR gözlükte lazer soldan sağa gezer'); };
+(function prevLoop() {                       // onizleme: yalnizca El sekmesi acik ve kaynak kameraysa
+  const im = $('#hPrev');
+  const src = S.st && S.st.hands && S.st.hands.cfg.source;
+  if ($('#t-hand').classList.contains('on') && (src === 'pc' || src === 'phone')) {
+    const n = new Image(); n.onload = () => { im.src = n.src; setTimeout(prevLoop, 90); };
+    n.onerror = () => setTimeout(prevLoop, 400); n.src = '/api/hand.jpg?' + Date.now();
+  } else setTimeout(prevLoop, 400);
+})();
+setInterval(async () => {
+  if (!$('#t-hand').classList.contains('on')) return;
+  try { const st = await (await fetch('/api/state')).json(); if (st.hands && Date.now() - S.lastEdit > 1500) { S.st.hands = st.hands; syncHand(); } } catch (e) { }
+}, 400);
+
+/* ---------- ortak ---------- */
+$$('#tabs button').forEach(b => b.onclick = () => {
+  $$('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $$('.tabpane').forEach(p => p.classList.toggle('on', p.id === 't-' + b.dataset.t));
+});
+$('#btnCenter').onclick = () => { api('/api/command', { cmd: 'recenter' }); toast('Telefon ortalandı'); };
+$('#btnIn').onclick = () => api('/api/command', { cmd: 'zoom_all', factor: .9 }).then(load);
+$('#btnOut').onclick = () => api('/api/command', { cmd: 'zoom_all', factor: 1.1 }).then(load);
+$('#btnReset').onclick = () => api('/api/command', { cmd: 'reset_layout' }).then(load);
+$('#focusOn').onchange = e => { S.st.focus = e.target.checked; push({ focus: e.target.checked }); };
+
+function buildFocus() {
+  S.sl.fz = slider($('#zoomSl'), { label: 'Fokus zoom (odaktaki pencerenin yakınlaşması)', min: 1, max: 8, step: .05, value: S.st.focus_zoom,
+    fmt: v => v.toFixed(2) + 'x', onInput: v => { S.st.focus_zoom = v; push({ focus_zoom: v }); } });
+  const c = $('#zoomChips'); c.innerHTML = '';
+  for (const z of [1, 2, 3, 4, 6, 8]) { const b = document.createElement('button'); b.textContent = z + 'x';
+    b.onclick = () => { S.st.focus_zoom = z; S.sl.fz.set(z); push({ focus_zoom: z }); }; c.appendChild(b); }
+}
+
+function stats() {
+  const s = S.st.stats || {};
+  $('#chFps b').textContent = s.fps != null ? s.fps : '–'; $('#chMb b').textContent = s.mbps != null ? s.mbps : '–';
+  $('#chQ b').textContent = S.st.stream.codec === 'h264' ? 'H.264' : S.st.stream.quality;
+  const lat = s.lat != null ? Math.round(s.lat) : null;
+  $('#chLat b').textContent = lat != null ? lat + ' ms' : '–'; $('#sLat').textContent = lat != null ? lat : '–';
+  $('#sFps').textContent = s.fps != null ? s.fps : '–'; $('#sMb').textContent = s.mbps != null ? s.mbps : '–'; $('#sKb').textContent = s.kb != null ? s.kb : '–';
+  $('#dot').classList.toggle('on', S.st.connected);
+  $('#conn').textContent = S.st.connected ? 'Telefon bağlı' : 'Telefon bekleniyor…';
+  const d = S.st.displays;
+  $('#dispInfo').innerHTML = `Pencere <b>${d.panels}</b> · sanal ekran <b>${d.virtual}</b>`;
+  if (document.activeElement !== $('#virtAuto')) $('#virtAuto').checked = d.auto !== false;
+  const busy = !!d.busy; $('#overlay').classList.toggle('hide', !busy);
+  if (busy) $('#ovMsg').textContent = d.busy;
+}
+
+async function load(first) {
+  const st = await (await fetch('/api/state')).json();
+  S.st = st; if (S.sel >= st.n) S.sel = 0;
+  if (st.version) { document.title = 'VR Monitor v' + st.version; const hs = $('h1 small'); if (hs) hs.textContent = 'Sanal monitör kontrol paneli · v' + st.version; }
+  if (first === true) { buildWinSliders(); buildFocus(); buildEnv(); buildStream(); buildHand(); }
+  refreshWin(); drawStage(); $('#focusOn').checked = st.focus; S.sl.fz.set(st.focus_zoom); syncEnv(); syncStream(); syncHand(); stats();
+}
+load(true);
+setInterval(async () => {                   // baglanti ve akis istatistigi; kullanici duzenlerken ayarlari ezme
+  try {
+    const st = await (await fetch('/api/state')).json();
+    if (st.n !== S.st.n) { location.reload(); return; }          // sanal ekran eklendi/cikarildi: arayuzu bastan kur
+    S.st.connected = st.connected; S.st.stats = st.stats; S.st.displays = st.displays;
+    if (Date.now() - S.lastEdit > 2500) { Object.assign(S.st, st); refreshWin(); drawStage(); $('#focusOn').checked = st.focus; syncEnv(); syncStream(); syncHand(); }
+    stats();
+  } catch (e) { $('#conn').textContent = 'PC programı kapalı'; $('#dot').classList.remove('on'); }
+}, 1000);
+</script>
+</body>
+</html>
